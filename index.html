@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Engbird Indoor vs. Mesonet Outdoor</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌡️</text></svg>">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{--bg:#0b1220;--card:#111a2e;--line:#22304d;--ink:#e2e8f0;--mute:#8b9bb8;--in:#2dd4bf;--out:#f59e0b;--feel:#fb7185;--rain:#60a5fa;--warn:#f87171}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,sans-serif;padding:max(12px,env(safe-area-inset-top)) 12px 40px}
+main{max-width:1100px;margin:auto}h1{font-size:1.3rem;margin:6px 0}
+.p{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:12px;margin-bottom:12px}
+.r{display:flex;flex-wrap:wrap;gap:8px;align-items:end}
+label{display:flex;flex-direction:column;font-size:.75rem;color:var(--mute);gap:2px}
+input,select,button{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:6px 9px;min-height:36px}
+button{cursor:pointer}button.pri{background:var(--in);color:#04201c;border-color:var(--in);font-weight:600}
+button.on{border-color:var(--in);color:var(--in)}button.del{color:var(--warn)}
+:focus-visible{outline:2px solid var(--in);outline-offset:2px}
+.badge{display:inline-block;padding:1px 8px;border-radius:99px;font-size:.78rem;font-weight:600}
+.bi{background:#0d3b38;color:var(--in)}.bo{background:#4a3208;color:var(--out)}
+.k{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px}
+.kc{border-left:3px solid var(--line);padding:2px 10px}.kc b{display:block;font:600 1.2rem ui-monospace,monospace}.kc span{font-size:.75rem;color:var(--mute)}
+.kc.i{border-color:var(--in)}.kc.o{border-color:var(--out)}
+.ch{height:270px;position:relative}h2{font-size:.95rem;margin:0 0 6px}
+.ins{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:8px;margin-top:10px}
+.ins div{border:1px solid var(--line);border-radius:6px;padding:8px;font-size:.85rem}
+.tw{overflow-x:auto;max-height:480px}table{border-collapse:collapse;width:100%;font-size:.8rem;white-space:nowrap}
+th,td{padding:4px 8px;border-bottom:1px solid var(--line);text-align:right}th{position:sticky;top:0;background:var(--card)}
+.ti{color:var(--in)}.to{color:var(--out)}th.ti,th.to{border-bottom:2px solid currentColor}
+.hot{background:#5b1d1d;color:var(--warn);border-radius:4px;padding:0 4px;margin-left:4px}
+#note{font-size:.8rem;color:var(--mute);margin-top:6px;word-break:break-all}#note.w{color:var(--out)}
+dialog{background:var(--card);color:var(--ink);border:1px solid var(--line);border-radius:10px;max-width:460px;width:94%}
+dialog::backdrop{background:#0009}dialog label{margin-bottom:8px}
+</style></head><body><main>
+<h1>🏠 Indoor vs. 🌤️ Outdoor Climate Analyzer</h1>
+<div class="p">
+ <div class="r">
+  <label>Room<select id="room"></select></label>
+  <button id="add">+ Add</button><button id="edit">Edit</button><button id="del" class="del">Delete</button>
+  <button id="up" class="pri">Upload Engbird CSV</button><input id="file" type="file" accept=".csv,.txt,.tsv" hidden>
+  <button id="reload">Reload outdoor</button><input id="iemfile" type="file" accept=".csv,.txt" hidden><button id="iemimp">Import IEM CSV</button>
+ </div>
+ <div id="note"></div>
+</div>
+<div class="p"><div class="r">
+ <label>Window<select id="scope"><option value="1">Single day (24h)</option><option value="3">3-day</option><option value="7">Week</option><option value="30">Month</option><option value="0">Full log</option></select></label>
+ <button id="prev">‹</button><label>Start date<select id="date"></select></label><button id="next">›</button>
+ <label>Resolution<select id="res"><option value="raw">10-min raw</option><option value="hour">Hourly avg</option><option value="day">Daily summary</option></select></label>
+ <label>Solar period<select id="solar"><option value="all">24h all</option><option value="day">☀️ Daylight only</option><option value="night">🌙 Nighttime only</option></select></label>
+</div></div>
+<div class="p"><div class="k" id="kpi"></div><div class="ins" id="ins"></div></div>
+<div class="r" style="margin-bottom:10px" id="tabs"></div>
+<div id="view"></div>
+</main>
+<dialog id="dlg"><form method="dialog" id="rf">
+ <h2 id="dt">Room</h2>
+ <label>Name<input id="fn" required></label>
+ <label>Address<input id="fa"></label>
+ <button type="button" id="geo">Update Weather Stations</button>
+ <div class="r" style="margin:8px 0"><label>Lat<input id="flat" type="number" step="any" style="width:110px"></label><label>Lon<input id="flon" type="number" step="any" style="width:110px"></label><label>Elev (m)<input id="fel" type="number" step="any" style="width:90px"></label></div>
+ <label>Station (closest first)<select id="fst"></select></label>
+ <label><span><input type="checkbox" id="cust"> Type custom station code</span><input id="fcode" maxlength="4" placeholder="e.g. KSAV or SAV" hidden></label>
+ <div class="r" style="margin-top:10px"><button class="pri" id="save" type="button">Save</button><button value="cancel">Cancel</button></div>
+</form></dialog>
+<script>
+const $=s=>document.querySelector(s),C={in:'#2dd4bf',out:'#f59e0b',feel:'#fb7185',rain:'#60a5fa',warn:'#f87171'};
+const ST=[["LHW","Wright AAF (Fort Stewart)",31.8889,-81.5622],["SVN","Hunter AAF (Savannah)",32.01,-81.1456],["SAV","Savannah/Hilton Head Intl",32.1276,-81.2021],["CWV","Claxton-Evans Co.",32.1966,-81.8696],["BQK","Brunswick Golden Isles",31.2588,-81.4665],["AMG","Alma/Bacon Co.",31.5358,-82.5067],["VDI","Vidalia Regional",32.1927,-82.3712],["ATL","Atlanta Hartsfield-Jackson",33.6407,-84.4277],["JAX","Jacksonville Intl",30.4941,-81.6879],["CHS","Charleston Intl",32.8986,-80.0405],["AGS","Augusta Regional",33.3699,-81.9645]];
+const H="73.17,56.68,73.11,57.32,72.76,57.91,72.57,58.2,72.43,58.49,72.18,58.79,72.15,59.11,72.04,59.29,76.23,54.59,76.97,53.56,74.44,56.34,74.21,57.48,73.96,58.69,74.29,57.3,74.47,54,74.55,54.93,74.92,55.67,74.8,55.49,74.48,53.4,74.07,55.57,73.93,57.13,73.75,58.33,73.52,59.18,73.36,59.84,73.23,60.45,72.93,60.88,72.68,61.25,72.39,61.54,72.27,61.79,72,62.03,71.71,62.41,79.22,57.77,75.21,53.81,74.26,58.23,73.8,60.82,73.98,62.05,74.03,60.11,73.94,58.41,74.36,58.99,74.77,58.35,74.95,57.82,75.02,55.95,74.69,57.83,74.55,58.91,74.48,60.09,74.16,60.91,73.92,61.5,73.69,62.03,73.58,62.48,73.45,62.73,73.16,63.09,73.23,63.62,72.98,64.07,72.76,64.46,72.83,64.73,72.66,65.03,72.71,65.95,73.25,67.5,74.05,67.3,74.95,65.64,75.45,60.95,76.12,57.74,76.69,56.63,77.12,55.65,76.87,53.99,75.97,53.19,75.62,55.87,75.25,59.74,74.88,58.37,74.49,55.78,74.13,59.37,73.98,61.7,74.11,62.82,73.76,63.74,73.75,64.28,73.54,64.8,73.75,65.56,73.4,65.39,73.42,66.48,73.63,67.72,74.32,65.23,75.08,61.95,75.7,59.06,76.18,57.65,76.72,58.02,76.63,56.56,77.21,56.06,77.48,56.57,77.05,54.57,76.32,52.9,75.52,55.41,75.35,58.61,75,60.23,74.59,61.35,74.31,62.2,74.14,62.82,74.18,63.43,73.88,63.99,73.76,64.45,73.76,64.86,73.63,65.3,73.42,65.58,73.52,65.92,73.54,67.05,73.93,63.24,74.5,65.86".split(',').map(Number);
+function seed(){const o=[],s=new Date(2026,10,1).getTime(),n=H.length/2;
+ for(let i=0;i<n;i++)for(let m=0;m<6;m++){const f=m/6,j=Math.min(i+1,n-1);o.push({timestamp:s+i*36e5+m*6e5,indoorTempF:+(H[2*i]+(H[2*j]-H[2*i])*f).toFixed(2),indoorRh:+(H[2*i+1]+(H[2*j+1]-H[2*i+1])*f).toFixed(2)})}
+ const fix={'2026-11-01 00:00':[73.44,56.59],'2026-11-02 06:10':[71.58,62.45],'2026-11-02 07:10':[81.09,58.12],'2026-11-04 07:20':[73.68,68.81],'2026-11-04 17:10':[76.4,49.53],'2026-11-05 09:50':[74.75,68.37]};
+ o.forEach(r=>{const f=fix[stamp(r.timestamp)];if(f){r.indoorTempF=f[0];r.indoorRh=f[1]}});return o}
+const pad=n=>String(n).padStart(2,'0'),ymd=t=>{const d=new Date(t);return`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`},stamp=t=>`${ymd(t)} ${pad(new Date(t).getHours())}:${pad(new Date(t).getMinutes())}`;
+const dstart=t=>{const d=new Date(t);return new Date(d.getFullYear(),d.getMonth(),d.getDate()).getTime()};
+let S;try{S=JSON.parse(localStorage.getItem('clim2'))}catch(e){}
+if(!S||!S.rooms||!S.rooms.length)S={cur:'r1',rooms:[{id:'r1',name:'314 - Office',address:'1616 Veterans Pkwy, Fort Stewart, GA',lat:31.872,lon:-81.601,elevationM:13.7,stationId:'LHW',macAddress:'49:25:09:15:05:13',rawRecords:seed()}]};
+const save=()=>{try{localStorage.setItem('clim2',JSON.stringify(S))}catch(e){}};
+const room=()=>S.rooms.find(r=>r.id===S.cur)||S.rooms[0];
+const U={scope:'0',start:null,res:'hour',solar:'all',tab:0};let OBS={},ALL=[],NIGHTS=[],charts=[];
+
+/* ---- math ---- */
+const dewF=(t,h)=>{if(t==null||h==null||h<=0)return null;const c=(t-32)*5/9,a=Math.log(h/100)+17.625*c/(243.04+c);return(243.04*a/(17.625-a))*9/5+32};
+const feelF=(t,h,w=5)=>{if(t==null||h==null)return null;if(t<=50&&w>3){const p=Math.pow(w,.16);return 35.74+.6215*t-35.75*p+.4275*t*p}
+ if(t<80)return t;return -42.379+2.04901523*t+10.14333127*h-.22475541*t*h-.00683783*t*t-.05481717*h*h+.00122874*t*t*h+.00085282*t*h*h-.00000199*t*t*h*h};
+const hav=(a,b,c,d)=>{const r=x=>x*Math.PI/180,h=Math.sin(r(c-a)/2)**2+Math.cos(r(a))*Math.cos(r(c))*Math.sin(r(d-b)/2)**2;return 7917.6*Math.asin(Math.sqrt(h))};
+const nthSun=(y,m,n)=>{const f=new Date(y,m,1).getDay();return 1+(7-f)%7+7*(n-1)};
+const isDST=(y,m,d)=>m>3&&m<11||m===3&&d>=nthSun(y,2,2)||m===11&&d<nthSun(y,10,1);
+const SUN={};
+function sun(ds,lat,lon){const k=ds+lat+lon;if(SUN[k])return SUN[k];const[y,m,d]=ds.split('-').map(Number);
+ const doy=Math.floor((Date.UTC(y,m-1,d)-Date.UTC(y,0,0))/864e5),g=2*Math.PI/365*(doy-1);
+ const eq=229.18*(.000075+.001868*Math.cos(g)-.032077*Math.sin(g)-.014615*Math.cos(2*g)-.040849*Math.sin(2*g));
+ const dc=.006918-.399912*Math.cos(g)+.070257*Math.sin(g)-.006758*Math.cos(2*g)+.000907*Math.sin(2*g)-.002697*Math.cos(3*g)+.00148*Math.sin(3*g);
+ const la=lat*Math.PI/180,ha=Math.acos(Math.max(-1,Math.min(1,Math.cos(90.833*Math.PI/180)/(Math.cos(la)*Math.cos(dc))-Math.tan(la)*Math.tan(dc))))*180/Math.PI;
+ const tz=isDST(y,m,d)?-4:-5,rise=720-4*(lon+ha)-eq+tz*60,set=720-4*(lon-ha)-eq+tz*60;
+ const f=x=>`${pad(Math.floor(x/60))}:${pad(Math.round(x%60)%60)}`;return SUN[k]={rise,set,riseS:f(rise),setS:f(set),hrs:(set-rise)/60}}
+const isDay=(t,R)=>{const s=sun(ymd(t),R.lat,R.lon),m=(t-dstart(t))/6e4;return m>=s.rise&&m<=s.set};
+
+/* ---- parsing ---- */
+function decode(buf){const b=new Uint8Array(buf);if(b[0]===255&&b[1]===254)return new TextDecoder('utf-16le').decode(buf);if(b[0]===254&&b[1]===255)return new TextDecoder('utf-16be').decode(buf);return new TextDecoder('utf-8').decode(buf)}
+function parseEng(txt){let L=txt.replace(/^\uFEFF/,'').split(/\r?\n/).filter(l=>l.trim()),mac='';
+ const dl=L[0].includes('\t')?'\t':',';if(/mac/i.test(L[0])){mac=(L[0].split(dl)[1]||'').trim();L=L.slice(1)}
+ const hd=L.shift().split(dl).map(s=>s.trim()),c=/\(c\)|°c/i.test(hd[1]||'');const rec=[];
+ for(const l of L){const p=l.split(dl),t=new Date((p[0]||'').trim().replace(' ','T')).getTime();let a=parseFloat(p[1]),h=parseFloat(p[2]);
+  if(isNaN(t)||isNaN(a)||isNaN(h))continue;if(c)a=a*9/5+32;rec.push({timestamp:t,indoorTempF:a,indoorRh:h})}
+ if(!rec.length)throw Error('No valid rows found. Expected: Time, Temperature(F), Humidity(%RH).');return{mac,rec:rec.sort((a,b)=>a.timestamp-b.timestamp)}}
+
+/* ---- outdoor (IEM) ---- */
+function iemUrl(R){const a=new Date(R.rawRecords[0].timestamp),b=new Date(R.rawRecords.at(-1).timestamp+864e5);
+ return`https://mesonet.agron.iastate.edu/cgi-bin/request/asos.py?station=${R.stationId.replace(/^K/,'')}&data=tmpf&data=relh&data=feel&data=p01i&data=wxcodes&year1=${a.getFullYear()}&month1=${a.getMonth()+1}&day1=${a.getDate()}&year2=${b.getFullYear()}&month2=${b.getMonth()+1}&day2=${b.getDate()}&tz=America/New_York&format=onlycomma&latlon=yes&elev=yes&missing=empty&trace=0.0001`}
+function parseIEM(txt){const L=txt.trim().split(/\r?\n/);const h=L.shift().split(','),ix=n=>h.indexOf(n);if(ix('valid')<0)throw Error('Unexpected IEM response');const n=v=>v===''||v==null||v==='M'?null:+v;
+ return L.map(l=>{const p=l.split(',');const t=new Date(p[ix('valid')].replace(' ','T')).getTime(),tf=n(p[ix('tmpf')]),rh=n(p[ix('relh')]);
+  return{t,tmpf:tf,relh:rh,feel:n(p[ix('feel')])??feelF(tf,rh),p:n(p[ix('p01i')]),wx:(p[ix('wxcodes')]||'').trim()}}).filter(o=>!isNaN(o.t)&&o.tmpf!=null).sort((a,b)=>a.t-b.t)}
+function simulate(R){const a=dstart(R.rawRecords[0].timestamp),b=R.rawRecords.at(-1).timestamp,o=[];
+ for(let t=a;t<=b+36e5;t+=36e5){const d=new Date(t),hr=d.getHours(),hs=[...ymd(t)].reduce((s,c)=>s+c.charCodeAt(0),0),mx=76+hs%7,mn=58+hs%6;
+  const ph=Math.max(0,Math.sin(Math.PI*(hr-7)/16)),tf=mn+(mx-mn)*(hr>=7&&hr<=23?ph:Math.max(0,.15-.01*((hr+17)%24))),rh=Math.min(98,96-(96-50)*ph),rain=hs%3===0&&hr>=14&&hr<=16?.05*(hr-13):0;
+  o.push({t,tmpf:tf,relh:rain?Math.min(98,rh+14):rh,feel:feelF(tf,rh),p:rain,wx:rain?'-RA':hr>=4&&hr<=7&&rh>90?'BR':hr>=11&&hr<=17?'SCT':'CLR'})}return o}
+async function loadObs(){const R=room(),url=iemUrl(R);$('#note').className='';$('#note').textContent='Fetching '+R.stationId+' from IEM…';
+ try{const r=await fetch(url);if(!r.ok)throw Error('HTTP '+r.status);OBS[R.id]={obs:parseIEM(await r.text()),url};if(!OBS[R.id].obs.length)throw Error('no observations returned')}
+ catch(e){OBS[R.id]={obs:simulate(R),url,sim:e.message}}
+ build();render()}
+
+/* ---- merge ---- */
+function merge(R,ob){const o=ob.obs;let j=0;const hp=new Map();
+ for(const x of o){const k=Math.floor(x.t/36e5),e=hp.get(k)||{p:0,wx:''};if(x.p!=null&&x.p>e.p)e.p=x.p;if(x.wx&&!e.wx)e.wx=x.wx;hp.set(k,e)}
+ const at=(f,t)=>{while(j+1<o.length&&o[j+1].t<=t)j++;const a=o[j],b=o[j+1];if(!a||a.t>t+54e5||a[f]==null)return null;
+  if(b&&a.t<=t&&b.t-a.t<=108e5&&b[f]!=null)return a[f]+(b[f]-a[f])*(t-a.t)/(b.t-a.t);return t-a.t<=54e5?a[f]:null};
+ return R.rawRecords.map(r=>{const t=r.timestamp,ot=at('tmpf',t),oh=at('relh',t),e=hp.get(Math.floor(t/36e5))||{p:0,wx:''},m0=new Date(t).getMinutes()===0;
+  return{t,it:r.indoorTempF,ih:r.indoorRh,id:dewF(r.indoorTempF,r.indoorRh),ot,oh,od:dewF(ot,oh),of:at('feel',t),p:m0?e.p:0,wx:e.wx,day:isDay(t,R)}})}
+function build(){const R=room(),ob=OBS[R.id];if(!R.rawRecords.length||!ob)return;ALL=merge(R,ob)}
+
+/* ---- window / filter / aggregate ---- */
+const dates=()=>[...new Set(room().rawRecords.map(r=>ymd(r.timestamp)))];
+function windowed(){const n=+U.scope;let rows=ALL;if(n){const d=dates(),s=new Date(U.start+'T00:00').getTime();rows=rows.filter(r=>r.t>=s&&r.t<s+n*864e5)}
+ if(U.solar!=='all')rows=rows.filter(r=>U.solar==='day'?r.day:!r.day);return rows}
+function agg(rows,res){if(res==='raw')return rows;const m=new Map();
+ for(const r of rows){const k=res==='hour'?Math.floor(r.t/36e5)*36e5:dstart(r.t);(m.get(k)||m.set(k,[]).get(k)).push(r)}
+ return[...m].map(([k,a])=>{const v=f=>a.map(r=>r[f]).filter(x=>x!=null),av=f=>{const x=v(f);return x.length?x.reduce((s,y)=>s+y,0)/x.length:null},mm=f=>{const x=v(f);return x.length?[Math.min(...x),Math.max(...x)]:[null,null]};
+  const it=av('it'),ih=av('ih'),ot=av('ot'),oh=av('oh'),i=mm('it'),o=mm('ot');
+  return{t:res==='day'?k+432e5:k,it,ih,id:dewF(it,ih),ot,oh,od:dewF(ot,oh),of:av('of'),p:v('p').reduce((s,y)=>s+y,0),wx:(a.find(r=>r.wx)||{}).wx||'',day:a.filter(r=>r.day).length>a.length/2,itn:i[0],itx:i[1],otn:o[0],otx:o[1]}})}
+
+/* ---- charts ---- */
+Chart.defaults.color='#8b9bb8';Chart.defaults.borderColor='#22304d';
+const nightPlugin={id:'night',beforeDatasetsDraw(c){if(!c.options.plugins.nightOn)return;const{ctx,chartArea:a,scales:{x}}=c;ctx.save();ctx.fillStyle='rgba(49,46,129,.5)';
+ for(const[s,e]of NIGHTS){const x1=Math.max(a.left,x.getPixelForValue(s)),x2=Math.min(a.right,x.getPixelForValue(e));if(x2>x1)ctx.fillRect(x1,a.top,x2-x1,a.bottom-a.top)}ctx.restore()}};
+Chart.register(nightPlugin);
+const tf=v=>{const d=new Date(v);return U.res==='day'?`${d.getMonth()+1}/${d.getDate()}`:`${d.getMonth()+1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`};
+const pts=(rows,f)=>rows.map(r=>({x:r.t,y:r[f]==null?null:+r[f].toFixed(2)}));
+const ds=(l,d,c,o={})=>({label:l,data:d,borderColor:c,backgroundColor:c,borderWidth:2,pointRadius:0,tension:.25,...o});
+function mk(id,rows,sets,y2,extra={}){const el=document.getElementById(id);const sc={x:{type:'linear',min:rows[0]?.t,max:rows.at(-1)?.t,ticks:{callback:tf,maxTicksLimit:7,maxRotation:0},grid:{display:false}},y:{...(extra.y||{})}};
+ if(y2)sc.y2={position:'right',min:0,grid:{display:false},title:{display:true,text:y2}};
+ charts.push(new Chart(el,{type:'line',data:{datasets:sets},options:{responsive:true,maintainAspectRatio:false,animation:false,interaction:{mode:'index',intersect:false},parsing:false,plugins:{nightOn:extra.night,legend:{labels:{boxWidth:14}},tooltip:{callbacks:{title:i=>tf(i[0].parsed.x)}}},scales:sc}}))}
+const IN=()=>`🏠 INDOOR (${room().name})`,OUT=()=>`🌤️ OUTDOOR (Mesonet ${room().stationId})`;
+const pearson=(a)=>{const n=a.length;if(n<3)return null;const mx=a.reduce((s,p)=>s+p.x,0)/n,my=a.reduce((s,p)=>s+p.y,0)/n;let sxy=0,sx=0,sy=0;for(const p of a){sxy+=(p.x-mx)*(p.y-my);sx+=(p.x-mx)**2;sy+=(p.y-my)**2}return sx&&sy?sxy/Math.sqrt(sx*sy):null};
+const f1=(x,u='')=>x==null?'—':x.toFixed(1)+u;
+
+/* ---- render ---- */
+const TABS=['Temperature & Heat Index','Humidity, Dew Point & Rain','Correlation & Differentials','Log Table'];
+function render(){const R=room();charts.forEach(c=>c.destroy());charts=[];
+ $('#room').innerHTML=S.rooms.map(r=>`<option value="${r.id}" ${r.id===R.id?'selected':''}>${r.name}</option>`).join('');
+ const D=dates();if(!U.start||!D.includes(U.start))U.start=D[0];$('#date').innerHTML=D.map(d=>`<option ${d===U.start?'selected':''}>${d}</option>`).join('');
+ $('#tabs').innerHTML=TABS.map((t,i)=>`<button class="${i===U.tab?'on':''}" data-t="${i}">${t}</button>`).join('');
+ const ob=OBS[R.id],n=$('#note');
+ if(ob){n.className=ob.sim?'w':'';n.innerHTML=(ob.sim?`⚠️ Could not reach IEM (${ob.sim}), so outdoor values are <b>simulated</b>. Open the request URL below in your browser, save the CSV, and use “Import IEM CSV”.<br>`:`<span class="badge bo">${OUT()}</span> ${ob.obs.length} observations. `)+`<a style="color:var(--mute)" href="${ob.url}" target="_blank" rel="noopener">${ob.url}</a>`}
+ const rows0=windowed(),rows=agg(rows0,U.res);
+ NIGHTS=[];if(rows.length){const a=dstart(rows[0].t)-864e5,b=rows.at(-1).t+864e5;for(let d=a;d<=b;d+=864e5){const s=sun(ymd(d),R.lat,R.lon),s2=sun(ymd(d+9e7),R.lat,R.lon);NIGHTS.push([d+s.set*6e4,dstart(d+9e7)+s2.rise*6e4])}}
+ const av=f=>{const x=rows0.map(r=>r[f]).filter(v=>v!=null);return x.length?x.reduce((s,y)=>s+y,0)/x.length:null};
+ const sn=sun(U.start||ymd(Date.now()),R.lat,R.lon),dT=rows0.filter(r=>r.ot!=null);
+ $('#kpi').innerHTML=[['i',f1(av('it'),'°F'),`<span class="badge bi">${IN()}</span> avg temp`],['i',f1(av('ih'),'%'),'indoor avg RH'],['o',f1(av('ot'),'°F'),`<span class="badge bo">${OUT()}</span> avg temp`],['o',f1(av('oh'),'%'),'outdoor avg RH'],['',dT.length?f1(dT.reduce((s,r)=>s+r.it-r.ot,0)/dT.length,'°F'):'—','ΔT indoor − outdoor'],['',`${sn.riseS} / ${sn.setS}`,`☀️ sunrise / 🌙 sunset (${sn.hrs.toFixed(1)} h)`]].map(k=>`<div class="kc ${k[0]}"><b>${k[1]}</b><span>${k[2]}</span></div>`).join('');
+ insights(rows0);
+ const v=$('#view');
+ if(!rows.length){v.innerHTML='<div class="p">No data in this window. Pick another date or solar period.</div>';return}
+ if(U.tab===0){v.innerHTML=`<div class="p"><h2>${IN()} vs ${OUT()}: temperature</h2><div class="ch"><canvas id="c1"></canvas></div><p style="color:var(--mute);margin:6px 0 0">Purple bands = nighttime (sunset to sunrise).</p></div>`;
+  mk('c1',rows,[ds(IN()+' temp',pts(rows,'it'),C.in),ds(OUT()+' air temp',pts(rows,'ot'),C.out),ds(OUT()+' heat index / wind chill',pts(rows,'of'),C.feel,{borderDash:[6,4],borderWidth:1.5})],0,{night:1})}
+ if(U.tab===1){v.innerHTML=`<div class="p"><h2>Humidity & rain</h2><div class="ch"><canvas id="c2"></canvas></div></div><div class="p"><h2>Dew point: ${IN()} vs ${OUT()}</h2><div class="ch"><canvas id="c3"></canvas></div><p style="color:var(--mute);margin:6px 0 0">If indoor RH rises while outdoor dew point stays low, the cause is temperature, not moisture infiltration.</p></div>`;
+  mk('c2',rows,[ds(IN()+' %RH',pts(rows,'ih'),C.in),ds(OUT()+' %RH',pts(rows,'oh'),C.out),ds('ASHRAE 60% limit',[{x:rows[0].t,y:60},{x:rows.at(-1).t,y:60}],C.warn,{borderDash:[6,4],borderWidth:1.5}),{type:'bar',label:OUT()+' 1-hr precip (in)',data:pts(rows,'p').map(p=>({x:p.x,y:p.y||0})),backgroundColor:C.rain,yAxisID:'y2',barThickness:4}],'inches',{night:1,y:{min:0,max:100}});
+  mk('c3',rows,[ds(IN()+' dew point',pts(rows,'id'),C.in),ds(OUT()+' dew point',pts(rows,'od'),C.out)],0,{night:1})}
+ if(U.tab===2){const pr=rows0.filter(r=>r.ot!=null),dp=pr.filter(r=>r.day).map(r=>({x:r.ot,y:r.it})),np=pr.filter(r=>!r.day).map(r=>({x:r.ot,y:r.it})),r=pearson(pr.map(r=>({x:r.ot,y:r.it})));
+  v.innerHTML=`<div class="p"><h2>${OUT()} temp (X) vs ${IN()} temp (Y) — Pearson r = ${r==null?'—':r.toFixed(3)}</h2><div class="ch"><canvas id="c4"></canvas></div></div><div class="p"><h2>Δ Temp and Δ RH (indoor − outdoor)</h2><div class="ch"><canvas id="c5"></canvas></div></div>`;
+  charts.push(new Chart($('#c4'),{type:'scatter',data:{datasets:[{label:'☀️ Daylight',data:dp,backgroundColor:C.out,pointRadius:3},{label:'🌙 Nighttime',data:np,backgroundColor:'#818cf8',pointRadius:3}]},options:{responsive:true,maintainAspectRatio:false,animation:false,scales:{x:{title:{display:true,text:'Outdoor °F'}},y:{title:{display:true,text:'Indoor °F'}}}}}));
+  const dt=rows.map(r=>({t:r.t,a:r.ot==null?null:r.it-r.ot,b:r.oh==null?null:r.ih-r.oh}));
+  mk('c5',rows,[ds('ΔTemp °F',dt.map(r=>({x:r.t,y:r.a})),C.in,{fill:'origin',backgroundColor:'#2dd4bf33'}),ds('ΔRH %',dt.map(r=>({x:r.t,y:r.b})),C.out,{fill:'origin',backgroundColor:'#f59e0b33'})],0,{night:1})}
+ if(U.tab===3){const dy=U.res==='day',lim=500,sh=rows.slice(0,lim);
+  v.innerHTML=`<div class="p"><div class="r"><h2 style="margin:0">Merged log (${rows.length} rows${rows.length>lim?`, showing ${lim}`:''})</h2><button id="csv" class="pri">Download Merged CSV</button></div><div class="tw"><table><thead><tr><th>Time</th><th>Solar</th><th class="ti" colspan="${dy?5:3}">${IN()}</th><th class="to" colspan="${dy?7:6}">${OUT()}</th></tr><tr><th></th><th></th><th class="ti">Temp</th>${dy?'<th class="ti">Min/Max</th>':''}<th class="ti">RH%</th><th class="ti">Dew</th>${dy?'':''}<th class="to">Temp</th>${dy?'<th class="to">Min/Max</th>':''}<th class="to">Heat idx</th><th class="to">RH%</th><th class="to">Dew</th><th class="to">Wx</th><th class="to">Rain</th></tr></thead><tbody>${sh.map(r=>`<tr><td>${tf(r.t)}</td><td>${r.day?'☀️':'🌙'}</td><td class="ti">${f1(r.it)}</td>${dy?`<td class="ti">${f1(r.itn)}/${f1(r.itx)}</td>`:''}<td class="ti">${f1(r.ih)}${r.ih>60?'<span class="hot">&gt;60%</span>':''}</td><td class="ti">${f1(r.id)}</td><td class="to">${f1(r.ot)}</td>${dy?`<td class="to">${f1(r.otn)}/${f1(r.otx)}</td>`:''}<td class="to">${f1(r.of)}</td><td class="to">${f1(r.oh)}</td><td class="to">${f1(r.od)}</td><td class="to">${r.wx||''}</td><td class="to">${r.p?r.p.toFixed(2):''}</td></tr>`).join('')}</tbody></table></div></div>`;
+  $('#csv').onclick=()=>{const q=x=>x==null?'':typeof x==='number'?x.toFixed(2):x,c='time,solar,indoor_f,indoor_rh,indoor_dew_f,outdoor_f,outdoor_heat_index_f,outdoor_rh,outdoor_dew_f,wx,precip_in,delta_t,delta_rh\n'+rows.map(r=>[stamp(r.t),r.day?'day':'night',r.it,r.ih,r.id,r.ot,r.of,r.oh,r.od,r.wx,r.p,r.ot==null?null:r.it-r.ot,r.oh==null?null:r.ih-r.oh].map(q).join(',')).join('\n');
+   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([c],{type:'text/csv'}));a.download=`${room().name.replace(/\W+/g,'_')}_merged.csv`;a.click()}}
+}
+function insights(rows){const el=$('#ins'),out=[];if(rows.length<12){el.innerHTML='';return}
+ let best=null;for(let i=0;i<rows.length;i++){const j=rows.findIndex(r=>r.t>=rows[i].t+36e5);if(j<0)break;const h=new Date(rows[i].t).getHours(),d=rows[j].it-rows[i].it;if(h>=4&&h<=11&&(!best||d>best.d))best={d,t:rows[i].t}}
+ if(best&&best.d>=1.5)out.push(`🔥 <b>Morning heating spike:</b> indoor temp rose ${best.d.toFixed(1)}°F within an hour starting ${tf(best.t)}, which looks like HVAC startup or sun load.`);
+ const pk=new Map();for(const r of rows){const k=ymd(r.t),p=pk.get(k)||{i:r,o:r};if(r.it>p.i.it)p.i=r;if(r.ot!=null&&(p.o.ot==null||r.ot>p.o.ot))p.o=r;pk.set(k,p)}
+ const lag=[...pk.values()].filter(p=>p.o.ot!=null).map(p=>(p.i.t-p.o.t)/36e5);if(lag.length)out.push(`🌤️ <b>Thermal lag:</b> indoor daily peak comes ${Math.abs(lag.reduce((s,x)=>s+x,0)/lag.length).toFixed(1)} h ${lag.reduce((s,x)=>s+x,0)>=0?'after':'before'} the outdoor peak on average.`);
+ const ev=rows.filter(r=>r.day===false&&new Date(r.t).getHours()<7&&r.ih!=null),pm=rows.filter(r=>new Date(r.t).getHours()>=18),a=x=>x.reduce((s,r)=>s+r.ih,0)/x.length;
+ if(ev.length&&pm.length)out.push(`💧 <b>Overnight humidity:</b> indoor RH averages ${a(ev).toFixed(0)}% before sunrise vs ${a(pm).toFixed(0)}% in the evening (${a(ev)-a(pm)>=0?'+':''}${(a(ev)-a(pm)).toFixed(0)} pts).`);
+ const over=rows.filter(r=>r.ih>60).length/rows.length*100;out.push(`${over>25?'⚠️':'✅'} <b>ASHRAE limit:</b> indoor RH is above 60% for ${over.toFixed(0)}% of this window.`);
+ el.innerHTML=out.map(t=>`<div>${t}</div>`).join('')}
+
+/* ---- room modal ---- */
+let editing=null;const dlg=$('#dlg');
+function rank(){const la=+$('#flat').value,lo=+$('#flon').value,cur=$('#fst').value,s=ST.map(x=>({id:x[0],n:x[1],d:hav(la,lo,x[2],x[3])})).sort((a,b)=>a.d-b.d);
+ $('#fst').innerHTML=s.map(x=>`<option value="${x.id}">${x.id} · ${x.n} (${x.d.toFixed(1)} mi)</option>`).join('');return s[0].id}
+function openRoom(r){editing=r;$('#dt').textContent=r?'Edit room':'Add room';const x=r||{name:'',address:'',lat:31.872,lon:-81.601,elevationM:13.7,stationId:'LHW'};
+ $('#fn').value=x.name;$('#fa').value=x.address;$('#flat').value=x.lat;$('#flon').value=x.lon;$('#fel').value=x.elevationM;rank();
+ const known=ST.some(s=>s[0]===x.stationId);$('#cust').checked=!known;$('#fcode').hidden=known;$('#fcode').value=known?'':x.stationId;if(known)$('#fst').value=x.stationId;dlg.showModal()}
+$('#cust').onchange=e=>$('#fcode').hidden=!e.target.checked;
+$('#geo').onclick=async()=>{const b=$('#geo');b.textContent='Looking up…';
+ try{const q=await(await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=1&q='+encodeURIComponent($('#fa').value))).json();if(!q[0])throw 0;$('#flat').value=(+q[0].lat).toFixed(4);$('#flon').value=(+q[0].lon).toFixed(4);
+  try{const e=await(await fetch(`https://api.open-meteo.com/v1/elevation?latitude=${q[0].lat}&longitude=${q[0].lon}`)).json();$('#fel').value=e.elevation[0]}catch(e){}b.textContent='Update Weather Stations ✓'}
+ catch(e){b.textContent='Address not found. Edit lat/lon, then retry'}
+ $('#fst').value=rank()};
+$('#save').onclick=()=>{if(!$('#fn').value.trim())return $('#fn').focus();const id=$('#cust').checked&&$('#fcode').value.trim()?$('#fcode').value.trim().toUpperCase():$('#fst').value;
+ const o={name:$('#fn').value.trim(),address:$('#fa').value,lat:+$('#flat').value,lon:+$('#flon').value,elevationM:+$('#fel').value,stationId:id};
+ if(editing)Object.assign(editing,o);else{const n={id:'r'+Date.now(),macAddress:'',rawRecords:[],...o};S.rooms.push(n);S.cur=n.id}
+ delete OBS[room().id];save();dlg.close();afterChange()};
+function afterChange(){const R=room();ALL=[];if(R.rawRecords.length)loadObs();else{$('#note').textContent='Upload an Engbird CSV for this room.';render()}}
+
+/* ---- events ---- */
+$('#room').onchange=e=>{S.cur=e.target.value;save();U.start=null;if(OBS[S.cur]){build();render()}else afterChange()};
+$('#add').onclick=()=>openRoom(null);$('#edit').onclick=()=>openRoom(room());
+$('#del').onclick=()=>{if(S.rooms.length<2)return alert('Keep at least one room.');if(!confirm(`Delete “${room().name}” and its data?`))return;S.rooms=S.rooms.filter(r=>r.id!==S.cur);S.cur=S.rooms[0].id;save();afterChange()};
+$('#up').onclick=()=>$('#file').click();
+$('#file').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const p=parseEng(decode(await f.arrayBuffer())),R=room();R.rawRecords=p.rec;R.macAddress=p.mac||R.macAddress;U.start=null;delete OBS[R.id];save();afterChange()}catch(x){$('#note').className='w';$('#note').textContent=x.message}e.target.value=''};
+$('#reload').onclick=()=>{delete OBS[room().id];afterChange()};
+$('#iemimp').onclick=()=>$('#iemfile').click();
+$('#iemfile').onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const R=room();OBS[R.id]={obs:parseIEM(await f.text()),url:iemUrl(R)};build();render()}catch(x){$('#note').className='w';$('#note').textContent='Import failed: '+x.message}e.target.value=''};
+const sync=()=>{U.scope=$('#scope').value;U.res=$('#res').value;U.solar=$('#solar').value;U.start=$('#date').value;render()};
+['#scope','#res','#solar','#date'].forEach(s=>$(s).onchange=sync);
+const step=d=>{const D=dates(),n=+U.scope||1,i=D.indexOf(U.start),k=Math.max(0,Math.min(D.length-1,i+d*n));U.start=D[k];render()};
+$('#prev').onclick=()=>step(-1);$('#next').onclick=()=>step(1);
+$('#tabs').onclick=e=>{const t=e.target.dataset.t;if(t!=null){U.tab=+t;render()}};
+$('#scope').value=U.scope;$('#res').value=U.res;
+afterChange();
+</script></body></html>
