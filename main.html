@@ -321,4 +321,148 @@
                                 <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-4">
                                     <div className="flex justify-between items-center">
                                         <h3 className="text-xs font-extrabold uppercase text-slate-300 tracking-wider">Synchronized Climate Log</h3>
-                                        <span className="text-xs text-slate-500 font-mono"
+                                        <span className="text-xs text-slate-500 font-mono">{csvData.length} total records</span>
+                                    </div>
+                                    <div className="overflow-x-auto max-h-96">
+                                        <table className="w-full text-left text-xs">
+                                            <thead className="bg-slate-950 text-slate-400 uppercase text-[10px] sticky top-0">
+                                                <tr>
+                                                    <th className="p-3">Time</th>
+                                                    <th className="p-3 text-teal-400">🏠 Indoor Temp (°F)</th>
+                                                    <th className="p-3 text-teal-400">🏠 Indoor RH (%RH)</th>
+                                                    <th className="p-3 text-amber-400">🌤️ Outdoor Temp (°F)</th>
+                                                    <th className="p-3 text-amber-400">🌤️ Outdoor RH (%RH)</th>
+                                                    <th className="p-3 text-amber-400">🌤️ Feels Like (°F)</th>
+                                                    <th className="p-3 text-amber-400">🌤️ Weather / Precip</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-800">
+                                                {csvData.length === 0 ? (
+                                                    <tr><td colSpan="7" className="p-6 text-center text-slate-500">No Engbird CSV loaded yet. Upload a CSV above to populate data.</td></tr>
+                                                ) : (
+                                                    csvData.slice(0, 100).map((row, idx) => {
+                                                        const meso = mesonetData[idx] || {};
+                                                        return (
+                                                            <tr key={idx} className="hover:bg-slate-850">
+                                                                <td className="p-3 font-mono text-slate-300">{row.time}</td>
+                                                                <td className="p-3 font-bold text-teal-300">{row.temp}</td>
+                                                                <td className="p-3 text-teal-300">{row.humidity}</td>
+                                                                <td className="p-3 font-bold text-amber-300">{meso.outdoorTemp !== undefined ? meso.outdoorTemp : '--'}</td>
+                                                                <td className="p-3 text-amber-300">{meso.outdoorHumidity !== undefined ? meso.outdoorHumidity : '--'}</td>
+                                                                <td className="p-3 text-slate-400">{meso.heatIndex !== undefined ? meso.heatIndex : '--'}</td>
+                                                                <td className="p-3 text-slate-400">{meso.wxcodes || 'CLR'} {meso.precip ? `(${meso.precip} in)` : ''}</td>
+                                                            </tr>
+                                                        );
+                                                    })
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </main>
+
+                    {/* Add / Edit Room Modal */}
+                    {isRoomModalOpen && (
+                        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                            <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg p-6 space-y-4 shadow-2xl">
+                                <div className="flex justify-between items-center border-b border-slate-800 pb-3">
+                                    <h3 className="text-sm font-extrabold uppercase text-teal-400 tracking-wider">
+                                        {editingRoom ? 'Edit Room' : 'Add New Room'}
+                                    </h3>
+                                    <button onClick={() => setIsRoomModalOpen(false)} className="text-slate-400 text-sm font-bold">✕</button>
+                                </div>
+                                <form onSubmit={handleSaveRoom} className="space-y-4 text-xs">
+                                    <div className="space-y-1">
+                                        <label className="text-slate-400 font-bold">Custom Room Name</label>
+                                        <input
+                                            type="text"
+                                            required
+                                            placeholder="e.g. 314 - Office"
+                                            value={roomName}
+                                            onChange={(e) => setRoomName(e.target.value)}
+                                            className="w-full bg-slate-950 border border-slate-800 text-slate-100 rounded-xl px-3 py-2 focus:outline-none"
+                                        />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-slate-400 font-bold">Street Address</label>
+                                        <div className="flex gap-2">
+                                            <input
+                                                type="text"
+                                                required
+                                                placeholder="e.g. 1616 Veterans Pkwy, Fort Stewart, GA"
+                                                value={address}
+                                                onChange={(e) => setAddress(e.target.value)}
+                                                className="flex-1 bg-slate-950 border border-slate-800 text-slate-100 rounded-xl px-3 py-2 focus:outline-none"
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={handleUpdateStations}
+                                                className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold px-3 py-2 rounded-xl transition shrink-0"
+                                            >
+                                                Update Stations
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div className="grid grid-cols-3 gap-3">
+                                        <div className="space-y-1">
+                                            <label className="text-slate-400 font-bold">Latitude</label>
+                                            <input
+                                                type="text"
+                                                required
+                                                value={lat}
+                                                onChange={(e) => setLat(e.target.value)}
+                                                className="w-full bg-slate-950 border border-slate-800 text-slate-100 rounded-xl px-3 py-2 focus:outline-none"
+                                            />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-slate-400 font-bold">Longitude</label>
+                                            <input
+                                                type="text"
+                                                required
+                                                value={lon}
+                                                onChange={(e) => setLon(e.target.value)}
+                                                className="w-full bg-slate-950 border border-slate-800 text-slate-100 rounded-xl px-3 py-2 focus:outline-none"
+                                            />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-slate-400 font-bold">Elevation (m)</label>
+                                            <input
+                                                type="text"
+                                                required
+                                                value={elev}
+                                                onChange={(e) => setElev(e.target.value)}
+                                                className="w-full bg-slate-950 border border-slate-800 text-slate-100 rounded-xl px-3 py-2 focus:outline-none"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-slate-400 font-bold">Mesonet / ASOS Station</label>
+                                        <select
+                                            value={station}
+                                            onChange={(e) => setStation(e.target.value)}
+                                            className="w-full bg-slate-950 border border-slate-800 text-slate-200 rounded-xl px-3 py-2 focus:outline-none font-bold"
+                                        >
+                                            {availableStations.map(st => (
+                                                <option key={st.id} value={st.id}>{st.id} - {st.name} ({st.dist})</option>
+                                            ))}
+                                        </select>
+                                    </div>
+                                    <div className="flex justify-end gap-2 pt-3 border-t border-slate-800">
+                                        <button type="button" onClick={() => setIsRoomModalOpen(false)} className="bg-slate-800 hover:bg-slate-700 text-slate-300 px-4 py-2 rounded-xl font-bold">Cancel</button>
+                                        <button type="submit" className="bg-teal-500 hover:bg-teal-400 text-slate-950 px-5 py-2 rounded-xl font-bold transition">Save Room</button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
